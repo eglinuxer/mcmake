@@ -3,7 +3,7 @@
 
 如需交流，请移步微信公众号: eglinux
 
-<img src="/Users/eg/file/code/github/mcmake/README.assets/image-20220803235838745.png" alt="公众号二维码" style="zoom:25%;" />
+<img src="README.assets/image-20220803235838745.png" alt="公众号二维码" style="zoom:25%;" />
 
 ## 0. CMake 简介
 - examples/0/00.cpp
@@ -323,7 +323,7 @@ $ sudo make install
 
 ### 2.2. CMake 命令
 
-![image-20220804002020555](/Users/eg/file/code/github/mcmake/README.assets/image-20220804002020555.png)
+![image-20220804002020555](README.assets/image-20220804002020555.png)
 
 - 命令分类
   - 脚本命令
