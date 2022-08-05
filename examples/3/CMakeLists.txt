@@ -1,0 +1,7 @@
+cmake_minimum_required(VERSION 3.24)
+list(APPEND CMAKE_MESSAGE_CONTEXT Top)
+project(test)
+message("test message log start")
+add_subdirectory(test1)
+add_subdirectory(test2)
+message("test message log stop")

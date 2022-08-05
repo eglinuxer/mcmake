@@ -733,6 +733,95 @@ cmake_policy(VERSION)
 
 ### 3.3. 让 CMake 日志更友好
 
+对于专注于编程语言本身的工程师来说，CMake 配置生成以及编译产生的日志可能并不需要关心，但对于编写 CMakeLists.txt 的工程师来说，一个良好的 CMake 日志输出对于 debug CMake 工程就会非常有帮助。
+
+CMake 输出日志使用 message() 命令，其形式如下：
+
+```cmake
+message([mode] msg1 [msg2]...)
+```
+
+- 在前面我们简单说过 message() 是 CMake 非常实用的一条命令，主要就是用来输出日志，方便给管理 CMake 工程的工程师提供 CMake 运行时的一些信息及遇到问题的时候 debug。其支持的日志等级（[mode]）如下：
+  - FATAL_ERROR
+    - CMake 遇到这个等级的 message() 命令时，会将此条日志输出后就退出，表示有致命错误需要工程师修复后才能继续运行
+  - SEND_ERROR
+    - 当这个等级的 message() 命令出现的时候，CMake 输出错误信息后回继续处理完配置阶段，但是不会处理生成阶段。容易和 FATAL_ERROR 混淆，建议避免使用。
+  - WARNING
+    - 输出警告信息，处理将继续
+  - AUTHOR_WARNING
+    - 这个等级主要是给开发 CMake 本身的工程师使用的，只有在 cmake 命令使用 -Wno-dev 参数时才会输出，对于使用 CMake 的工程师来说不要使用这个等级
+  - DEPRECATION
+    - 用于输出一些表示弃用的信息给工程师，一般在 CMake 项目中不会使用。
+  - NOTICE
+    - 输出提示信息，如果非必要，避免使用这个等级
+  - STATUS
+    - 在 CMake 项目中经常使用这个等级输出单行信息，CMake 默认只会打印比这个等级高或者相等的 message() 命令
+  - VERBOSE
+    - 用于输出更详细的信息，默认不输出
+  - DEBUG
+    - 调试级别的信息，一般只有维护 CMake 工程的工程师才会使用
+  - TRACE
+    - 会输出非常详细的日志信息
+
+在运行 cmake 命令的时候，我们可以传递 --log-level 参数，用于指定要输出的最低日志等级，不指定的话默认时 STATUS，例如：
+
+```shell
+cmake --log-level=VERBOSE ...
+```
+
+为了让输出的日志能够区分时那个 CMakeLists.txt 输出的，我们可以使用 CMAKE_MESSAGE_CONTEXT，直接看个例子(examples/3/)就明白了：
+
+- 顶级目录 CMakeLists.txt
+
+  ```cmake
+  cmake_minimum_required(VERSION 3.24)
+  list(APPEND CMAKE_MESSAGE_CONTEXT Top)
+  project(test)
+  message("test message log start")
+  add_subdirectory(test1)
+  add_subdirectory(test2)
+  message("test message log stop")
+  ```
+
+- test1/CMakeLists.txt
+
+  ```cmake
+  list(APPEND CMAKE_MESSAGE_CONTEXT test1)
+  message("This is a test log")
+  ```
+
+- test2/CMakeLists.txt
+
+  ```cmake
+  list(APPEND CMAKE_MESSAGE_CONTEXT test2)
+  message("This is a test log")
+  ```
+
+  输出如下：
+
+  ```cmake
+  $ cmake -S . -B build --log-context                                                                                                                                                                                      
+  -- [Top] The C compiler identification is AppleClang 13.1.6.13160021
+  -- [Top] The CXX compiler identification is AppleClang 13.1.6.13160021
+  -- [Top] Detecting C compiler ABI info
+  -- [Top] Detecting C compiler ABI info - done
+  -- [Top] Check for working C compiler: /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/cc - skipped
+  -- [Top] Detecting C compile features
+  -- [Top] Detecting C compile features - done
+  -- [Top] Detecting CXX compiler ABI info
+  -- [Top] Detecting CXX compiler ABI info - done
+  -- [Top] Check for working CXX compiler: /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ - skipped
+  -- [Top] Detecting CXX compile features
+  -- [Top] Detecting CXX compile features - done
+  [Top] test message log start
+  [Top.test1] This is a test log
+  [Top.test2] This is a test log
+  [Top] test message log stop
+  -- Configuring done
+  -- Generating done
+  -- Build files have been written to: /Users/eg/file/code/github/mcmake/examples/3/build
+  ```
+
 ### 3.4. 禁止源内构建
 
 ### 3.5. 配置 C++ 工具链
