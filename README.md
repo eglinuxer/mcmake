@@ -824,7 +824,70 @@ cmake --log-level=VERBOSE ...
 
 ### 3.4. 禁止源内构建
 
-### 3.5. 配置 C++ 工具链
+先说下什么是源内构建和源外构建：
+
+- 源内构建
+  - 构建目录在源码目录中或者构建目录和源码目录是同一个目录
+- 源外构建
+  - 构建目录在源码目录之外
+
+源内构建，特别是构建目录和源码目录是同一个目录的时候，构建输出的文件会和源码文件混淆在一起，有时甚至会覆盖源码文件，为了避免出现这种情况，一般建议使用源外构建，这也是很多支持 CMake 的 IDE 的默认做法。
+
+虽然源外构建能够隔离源码目录和构建目录，确保源码不被污染，但是这也让构建目录和源码目录之间失去联系。我的推荐是使用改良的源内构建，也就是在源码目录里面新建一个构建目录，这样既能让构建和源码隔离，也能让构建目录和源码目录保持关系。
+
+经常看到有人这样使用 cmake 配置项目：
+
+```shell
+cmake .
+```
+
+这句命令的意思是在当前目录运行 cmake 配置进行项目构建，这就等价于：
+
+```shell
+cmake -S . -B .
+```
+
+显然是源码目录和构建目录相同，构建输出文件会和源码文件混淆在一起，所以要避免。
+
+我一直推荐的做法是这样：
+
+```shell
+cmake -S . -B build
+```
+
+有没有一种办法，能够在进行配置的时候，如果发现源码目录和构建目录相同就停止构建呢？其实很简单，使用前面讲过的 message() 命令就可以实现：
+
+```cmake
+if(CMAKE_SOURCE_DIR STREQUAL CMAKE_BINARY_DIR)
+    message(FATAL_ERROR
+      "\n"
+      "In-source builds are not allowed.\n"
+      "Instead, provide a path to build tree like so:\n"
+      "cmake -S . -B <destination>\n"
+      "\n"
+      "To remove files you accidentally created execute:\n"
+      "please delete CMakeFiles and CMakeCache.txt\n"
+    )
+endif()
+```
+
+这里的做法不算优雅，因为即使退出处理了，但还是会在源码目录产生一些构建文件，例如：CMakeFiles 和 CMakeCache.txt ，但目前也没有更好的办法。
+
+### 3.5. 指定 C++ 标准
+
+我们可以单独在某个 target 上指定 C++ 标准，使用如下形式：
+
+```cmake
+set_property(TARGET <target> PROPERTY CXX_STANDARD <standard>)
+```
+
+但是为了整个项目的统一，还是建议在顶级 CMakeLists.txt 中统一指定，如果有需要单独指定 C++ 版本的，再使用上面的形式：
+
+```cmake
+set(CMAKE_CXX_STANDARD 17)             # 指定使用 C++17 标准
+set(CMAKE_CXX_STANDARD_REQUIRED ON)    # 必须满足指定的 C++ 标准
+set(CMAKE_CXX_EXTENSIONS OFF)          # 关闭各个编译器自己拓展的特性，只使用 C++ 标准支持的特性
+```
 
 ### 3.6. 定义目标
 
