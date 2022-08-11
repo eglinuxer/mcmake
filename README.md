@@ -581,10 +581,12 @@ $ sudo make install
 
 - 命令参数解析
 
-  - ${ARGC}
-  - ${ARGV}
-  - ${ARG0}, ${ARG1}, ${ARG2}
-  - ${ARGN}
+  ```cmake
+  ${ARGC}
+  ${ARGV}
+  ${ARG0},${ARG1}, ${ARG2}
+  ${ARGN}
+  ```
 
 ### 2.6. 实用命令
 
@@ -890,6 +892,71 @@ set(CMAKE_CXX_EXTENSIONS OFF)          # 关闭各个编译器自己拓展的特
 ```
 
 ### 3.6. 定义目标
+
+- add_executable()
+
+  ```cmake
+  add_executable(<name> [WIN32] [MACOSX_BUNDLE]
+                 [EXCLUDE_FROM_ALL]
+                 [source1] [source2 ...])
+  ```
+
+  ```cmake
+  add_executable(<name> IMPORTED [GLOBAL])
+  ```
+
+  ```cmake
+  add_executable(<name> ALIAS <target>)
+  ```
+
+  TODO: 添加详细说明
+
+- add_library()
+
+  ```cmake
+  add_library(<name> [STATIC | SHARED | MODULE]
+              [EXCLUDE_FROM_ALL]
+              [<source>...])
+  ```
+
+  ```cmake
+  add_library(<name> OBJECT [<source>...])
+  ```
+
+  ```cmake
+  add_library(<name> INTERFACE)
+  ```
+
+  ```cmake
+  add_library(<name> INTERFACE [<source>...] [EXCLUDE_FROM_ALL])
+  ```
+
+  ```cmake
+  add_library(<name> <type> IMPORTED [GLOBAL])
+  ```
+
+  ```cmake
+  add_library(<name> ALIAS <target>)
+  ```
+
+  TODO: 添加详细说明
+
+- add_custom_target()
+
+  ```cmake
+  add_custom_target(Name [ALL] [command1 [args1...]]
+                    [COMMAND command2 [args2...] ...]
+                    [DEPENDS depend depend depend ... ]
+                    [BYPRODUCTS [files...]]
+                    [WORKING_DIRECTORY dir]
+                    [COMMENT comment]
+                    [JOB_POOL job_pool]
+                    [VERBATIM] [USES_TERMINAL]
+                    [COMMAND_EXPAND_LISTS]
+                    [SOURCES src1 [src2...]])
+  ```
+
+  TODO: 添加详细说明
 
 ### 3.3. 考虑如何组织代码结构
 
