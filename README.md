@@ -82,10 +82,10 @@ $ sudo make install
   ```shell
   # 推荐用法
   cmake [<options>] -S <path-to-source> -B <path-to-build>
-
+  
   # 不推荐的用法
   cmake [<options>] <path-to-source>
-
+  
   # 一般是之前运行过一次，已经生成过
   cmake [<options>] <path-to-existing-build>
   ```
@@ -295,6 +295,19 @@ $ sudo make install
   cmake -E <command> [<options>]
   # 例如：cat, chdir, compare_files, copy, copy_directory, copy_if_different, echo, echo_append 等
   ```
+
+- 生成可视化 target 依赖关系图
+
+  ```shell
+  cmake --graphviz=test.dot .
+  # https://dreampuf.github.io/GraphvizOnline/
+  ```
+
+  - 上面的命令生成的依赖关系图不包含用户自定义 target，如果要包含，需要新建一个 CMakeGraphVizOptions.cmake 文件，然后通过这个 CMake 脚本自定义如何生成 target 关系图
+
+    ```cmake
+    set(GRAPHVIZ_CUSTOM_TARGETS TRUE)
+    # 更多选项参考官方文档
 
 ### 1.2. ctest
 
@@ -893,6 +906,8 @@ set(CMAKE_CXX_EXTENSIONS OFF)          # 关闭各个编译器自己拓展的特
 
 ### 3.6. 定义目标
 
+#### 3.6.1 定义目标的命令
+
 - add_executable()
 
   ```cmake
@@ -958,5 +973,416 @@ set(CMAKE_CXX_EXTENSIONS OFF)          # 关闭各个编译器自己拓展的特
 
   TODO: 添加详细说明
 
-### 3.3. 考虑如何组织代码结构
+#### 3.6.2. 目标依赖关系
+
+一个成熟的项目，往往是由无数个组件构成，而各个组件之间会有依赖关系。所以组织代码结构就是在如何细分组件以及组织这些组件之间的依赖关系。
+
+先来看一个没有外部组件，全部组件都属于当前项目的一个代码结构是如何组织的。
+
+<img src=".assets/Figure_4.1_B17205-20220821202700473.jpg" alt="Figure 4.1 – Order of building dependencies in the BankApp project " style="zoom: 75%;" />
+
+如上图，一共有 5 个 target 组件，它们之间的依赖关系如箭头所示。CMakeLists.txt 如下：
+
+```cmake
+cmake_minimum_required(VERSION 3.24)
+
+project(BankApp CXX)
+
+add_executable(terminal_app terminal_app.cpp)
+target_link_libraries(terminal_app calculations)
+
+add_executable(gui_app gui_app.cpp)
+target_link_libraries(gui_app calculations drawing)
+
+add_library(calculations calculations.cpp)
+add_library(drawing drawing.cpp)
+
+add_custom_target(checksum ALL
+    COMMAND sh -c "cksum terminal_app > terminal.ck"
+    COMMAND sh -c "cksum gui_app > gui.ck"
+    BYPRODUCTS terminal.ck gui.ck
+    COMMENT "Checking the sums..."
+)
+add_dependencies(checksum terminal_app gui_app)
+```
+
+#### 3.6.3. 目标属性
+
+CMake 为各种类型的目标定义了许多默认的属性，可以参考官方文档。当然用户也可以为目标自定义属性以及获取属性的值，命令如下：
+
+```cmake
+get_target_property(<VAR> target property)
+set_target_properties(target1 target2 ...
+                      PROPERTIES prop1 value1
+                      prop2 value2 ...)
+```
+
+- Tips
+
+  - CMake 不光 target 有属性的概念，对于 GLOBA, DIRECTORY, SOURCE, INSTAL,TEST, 和 CACHE 均有属性的概念
+
+  - 建议使用带 target 的命令设置和获取属性，当然不是 target 的时候也可以使用更低级的命令实现
+
+    ```cmake
+    get_property(<variable>
+                 <GLOBAL             |
+                  DIRECTORY [<dir>]  |
+                  TARGET    <target> |
+                  SOURCE    <source>
+                            [DIRECTORY <dir> | TARGET_DIRECTORY <target>] |
+                  INSTALL   <file>   |
+                  TEST      <test>   |
+                  CACHE     <entry>  |
+                  VARIABLE           >
+                 PROPERTY <name>
+                 [SET | DEFINED | BRIEF_DOCS | FULL_DOCS])
+                 
+    set_property(<GLOBAL                      |
+                  DIRECTORY [<dir>]           |
+                  TARGET    [<target1> ...]   |
+                  SOURCE    [<src1> ...]
+                            [DIRECTORY <dirs> ...]
+                            [TARGET_DIRECTORY <targets> ...] |
+                  INSTALL   [<file1> ...]     |
+                  TEST      [<test1> ...]     |
+                  CACHE     [<entry1> ...]    >
+                 [APPEND] [APPEND_STRING]
+                 PROPERTY <name> [<value1> ...])
+    ```
+
+- 属性传播
+
+  - PRIVATE
+  - PUBLIC
+  - INTERFACE
+
+- 属性兼容性
+
+  - TODO
+
+#### 3.6.4. 伪目标
+
+伪目标是指那种不会进行构建的目标。
+
+- 导入目标
+
+- 别名目标
+
+  ```cmake
+  add_executable(<name> ALIAS <target>)
+  add_library(<name> ALIAS <target>)
+  ```
+
+- 接口库
+
+  - 仅头文件库
+
+  - 将一堆需要传播的属性捆绑到一个逻辑 target 中
+
+    ```cmake
+    add_library(warning_props INTERFACE)
+    target_compile_options(warning_props
+    		INTERFACE 
+      			-Wall -Wextra -Wpedantic
+    ) 
+    target_link_libraries(executable warning_props)
+    ```
+
+### 3.7. 用户自定义命令
+
+- 生成其他目标需要的源文件
+- 将其他语言翻译成 C++
+- 在其他目标构建前后执行特定任务
+
+```cmake
+add_custom_command(OUTPUT output1 [output2 ...]
+                   COMMAND command1 [ARGS] [args1...]
+                   [COMMAND command2 [ARGS] [args2...] ...]
+                   [MAIN_DEPENDENCY depend]
+                   [DEPENDS [depends...]]
+                   [BYPRODUCTS [files...]]
+                   [IMPLICIT_DEPENDS <lang1> depend1
+                                    [<lang2> depend2] ...]
+                   [WORKING_DIRECTORY dir]
+                   [COMMENT comment]
+                   [DEPFILE depfile]
+                   [JOB_POOL job_pool]
+                   [VERBATIM] [APPEND] [USES_TERMINAL]
+                   [COMMAND_EXPAND_LISTS])
+```
+
+如上是用户自定义命令的其中一种形式，用户自定义目标不会创建一个逻辑上的 target，但是他的行为比较像 target，会加入到 target 依赖关系图中（将用户自定义命令的输出作为其他 target 的依赖，或者使用 DEPENDS 关键字）。
+
+- 例子1：
+
+  - person.proto
+
+  ```c++
+  message Person {
+      required string name = 1;
+      required int32 id = 2;
+      optional string email = 3;
+  }
+  ```
+
+  - CMakeLists.txt
+
+  ```cmake
+  add_custom_command(OUTPUT person.pb.h person.pb.cc
+          COMMAND protoc ARGS person.proto
+          DEPENDS person.proto
+  )
+  ```
+
+- 例子2:
+
+  ```cmake
+  add_executable(main main.cpp constants.h)
+  target_include_directories(main
+  		PRIVATE
+    			${CMAKE_BINARY_DIR}
+  )
+  
+  add_custom_command(OUTPUT constants.h 
+  		COMMAND cp ARGS "${CMAKE_SOURCE_DIR}/template.xyz" constants.h
+  )
+
+```cmake
+add_custom_command(TARGET <target>
+                   PRE_BUILD | PRE_LINK | POST_BUILD
+                   COMMAND command1 [ARGS] [args1...]
+                   [COMMAND command2 [ARGS] [args2...] ...]
+                   [BYPRODUCTS [files...]]
+                   [WORKING_DIRECTORY dir]
+                   [COMMENT comment]
+                   [VERBATIM] [USES_TERMINAL]
+                   [COMMAND_EXPAND_LISTS])
+```
+
+上述用户自定义命令形式可以实现在构建一个目标之前或者之后执行一系列命令，这个非常的实用。
+
+- PRE_BUILD
+  - 只适用于 Visual Studio 生成器，如果是其他生成器，则相当于 PRE_LINK。
+-  PRE_LINK
+  - 在编译完成，链接之前运行命令，用户自定义目标不适用
+- POST_BUILD
+  - 改目标的其他命令都执行完了才执行的命令
+
+使用这种形式可以将之前计算哈希值的例子：
+
+```cmake
+add_custom_target(checksum ALL
+    COMMAND sh -c "cksum terminal_app > terminal.ck"
+    COMMAND sh -c "cksum gui_app > gui.ck"
+    BYPRODUCTS terminal.ck gui.ck
+    COMMENT "Checking the sums..."
+)
+```
+
+优化成：
+
+```cmake
+cmake_minimum_required(VERSION 3.24)
+project(Command CXX)
+add_executable(main main.cpp)
+add_custom_command(TARGET main POST_BUILD
+                   COMMAND cksum ARGS "$<TARGET_FILE:main>" > "main.ck"
+)
+```
+
+### 3.8. 理解生成器表达式
+
+在配置阶段，我们常常遇到先有鸡还是先有蛋的问题，一个目标依赖另一个目标输出的文件，但是在配置阶段这些信息是获取不到的，只有等配置阶段完成才可能知道。所以在配置阶段可以使用占位符代替这些依赖信息，等到生成阶段再去替换成实际的信息，这就是生成器表达式存在的意义。
+
+调试生成器表达式的方法：
+
+- 利用 file() 命令
+
+  ```cmake
+  file(GENERATE OUTPUT filename CONTENT "$<...>")
+  ```
+
+- 利用用户自定义目标
+
+  ```cmake
+  add_custom_target(gendbg COMMAND ${CMAKE_COMMAND} -E echo "$<...>")
+  ```
+
+#### 3.8.1. 生成器表达式语法
+
+![Figure 4.4 – The syntax of a generator expression ](.assets/Figure_4.4_B17205.jpg)
+
+- 如果有参数，则先写一个冒号，然后是参数，多个参数用逗号隔开。也就是说存在没有参数的生成器表达式，形式如下：
+
+  ```cmake
+  $<EXPRESSION>
+  ```
+
+- 生成器表达式支持嵌套，例如：
+
+  ```cmake
+  $<UPPER_CASE:$<PLATFORM_ID>>
+  ```
+
+- 生成器表达式中还可以取变量的值，例如：
+
+  ```cmake
+  $<UPPER_CASE:${my_variable}>
+  ```
+
+  值得注意的是，生成器表达式中的变量在配置阶段评估。
+
+- 生成器表达式支持条件表达式
+
+  ```cmake
+  $<IF:condition,true_string,false_string>
+  $<condition:true_string >
+  ```
+
+  ```cmake
+  $<$<AND:$<COMPILE_LANGUAGE:CXX>,$<CXX_COMPILER_ID:AppleClang,Clang>>:COMPILING_CXX_WITH_CLANG>
+  ```
+
+生成器表达式被评估为两种类型：
+
+- bool 类型：1、0
+
+  ```cmake
+  $<NOT:arg>
+  $<AND:arg1,arg2,arg3...>
+  $<OR:arg1,arg2,arg3...>
+  $<BOOL:string_arg>
+  
+  # 除了空字符串，0, FALSE, OFF, N, NO, IGNORE, NOTFOUND，-NOTFOUND 结尾的字符串被评估为假，其他均评估为真
+  
+  $<STREQUAL:arg1,arg2>
+  $<EQUAL:arg1,arg2>
+  $<IN_LIST:arg,list>
+  $<VERSION_EQUAL:v1,v2>
+  $<VERSION_LESS:v1,v2>
+  $<VERSION_GREATER:v1,v2>
+  $<VERSION_LESS_EQUAL:v1,v2>
+  $<VERSION_GREATER_EQUAL:v1,v2>
+  
+  $<TARGET_EXISTS:arg>
+  
+  $<CONFIG:args> # 当前配置是否在 args 中
+  $<PLATFORM_ID:args>
+  $<LANG_COMPILER_ID:args>
+  $<COMPILE_FEATURES:features> # 编译器是否支持 features
+  
+  $<COMPILE_LANG_AND_ID:lang,compiler_id1,compiler_id2...>
+  $<LINK_LANG_AND_ID:lang,compiler_id1,compiler_id2...>
+  
+  $<COMPILE_LANGUAGE:args>
+  $<LINK_LANGUAGE:args>
+  ```
+
+  ```cmake
+  target_compile_definitions(myapp
+  		PRIVATE 
+   				$<$<COMPILE_LANG_AND_ID:CXX,AppleClang,Clang>:CXX_CLANG>
+   				$<$<COMPILE_LANG_AND_ID:CXX,Intel>:CXX_INTEL>
+   				$<$<COMPILE_LANG_AND_ID:C,Clang>:C_CLANG>
+  )
+  
+  target_compile_options(myapp
+    	PRIVATE
+    			$<$<COMPILE_LANGUAGE:CXX>:-fno-exceptions>
+  )
+  ```
+
+  
+
+- 字符串类型
+
+  ```cmake
+  $<CONFIG> # Debug Release
+  $<PLATFORM_ID> # Linux, Windows, or Darwin
+  $<LANG_COMPILER_ID>
+  $<COMPILE_LANGUAGE>
+  $<LINK_LANGUAGE>
+  
+  $<TARGET_NAME_IF_EXISTS:target>
+  
+  $<TARGET_FILE:target>
+  $<TARGET_FILE_NAME:target>
+  $<TARGET_FILE_BASE_NAME:target>
+  $<TARGET_FILE_PREFIX:target>
+  $<TARGET_FILE_SUFFIX:target> #.so, .exe
+  $<TARGET_FILE_DIR:target>
+  
+  $<TARGET_LINKER_FILE:target>
+  $<TARGET_LINKER_FILE_NAME:target>
+  $<TARGET_LINKER_FILE_BASE_NAME:target>
+  $<TARGET_LINKER_FILE_PREFIX:target>
+  $<TARGET_LINKER_FILE_SUFFIX:target>
+  $<TARGET_LINKER_FILE_DIR:target>
+  
+  $<TARGET_SONAME_FILE:target>
+  $<TARGET_SONAME_FILE_NAME:target>
+  $<TARGET_SONAME_FILE_DIR:target>
+  
+  $<TARGET_PDB_FILE:target>
+  $<TARGET_PDB_FILE_BASE_NAME:target>
+  $<TARGET_PDB_FILE_NAME:target>
+  $<TARGET_PDB_FILE_DIR:target>.
+  
+  $<TARGET_BUNDLE_DIR:target>
+  $<TARGET_BUNDLE_CONTENT_DIR:target> 
+  $<TARGET_PROPERTY:target,prop>
+  $<TARGET_PROPERTY:prop>
+  $<INSTALL_PREFIX>
+  
+  $<ANGLE-R> # > 符号
+  $<COMMA> # 逗号
+  $<SEMICOLON> # 冒号
+  
+  $<JOIN:list,d>
+  $<REMOVE_DUPLICATES:list>
+  $<FILTER:list,INCLUDE|EXCLUDE,regex>
+  $<LOWER_CASE:string>
+  $<UPPER_CASE:string>
+  $<GENEX_EVAL:expr>
+  $<TARGET_GENEX_EVAL:target,expr>
+  
+  $<LINK_ONLY:deps>
+  $<INSTALL_INTERFACE:content> # returns content if used with install(EXPORT)
+  $<BUILD_INTERFACE:content> # returns content if used with an export() command or by another target in the same buildsystem
+  
+  $<MAKE_C_IDENTIFIER:input>
+  $<SHELL_PATH:input>
+  
+  $<TARGET_OBJECTS:target>
+  ```
+
+  ```cmake
+  target_compile_options(tgt
+  		$<$<CONFIG:DEBUG>:-ginline-points>
+  )
+  
+  if (${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
+       target_compile_definitions(myProject PRIVATE LINUX=1)
+  endif()
+  target_compile_definitions(myProject
+  		PRIVATE
+    			$<$<CMAKE_SYSTEM_NAME:LINUX>:LINUX=1>
+  )
+  
+  add_library(enable_rtti INTERFACE)
+  target_compile_options(enable_rtti
+  		INTERFACE
+    			$<$<OR:$<COMPILER_ID:GNU>,$<COMPILER_ID:Clang>>:-rtti>
+  )
+  ```
+
+  
+
+  
+
+
+
+
+
+
 
